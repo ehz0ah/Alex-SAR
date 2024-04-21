@@ -47,7 +47,7 @@ volatile TDirection dir;
 
 float alexDiagonal = 0.0;
 
-float alexCirc = 70.0;
+float alexCirc = 0.0;
 
 Servo clawServo;  // Create a servo object to control the claw
 
