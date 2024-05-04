@@ -10,7 +10,7 @@ This project is about an autonomous vehicle designed for search and rescue opera
 - **SLAM (Simultaneous Localization and Mapping) algorithm**: Used for mapping the environment and tracking the vehicle's location.
 - **Ultrasonic Sensors**: For close range obstacle detection and avoidance.
 - **Colour Sensors**: For detecting coloured objects or signals during the mission.
-- **Hall Sensors**: For detecting the presence of magnetic fields.
+- **Hall Sensors**: For calculating and calibrating movement of the robot.
 
 ## Hardware Setup
 The hardware of this vehicle consists of a Raspberry Pi 4 and an Arduino Mega. The Raspberry Pi 4 handles high level tasks such as communication, navigation and sensor data processing. The Arduino Mega controls the motors and reads data from ultrasonic, colour and hall sensors.
@@ -25,8 +25,5 @@ The software is primarily written in Python and C++. Python is used for high lev
 4. Run the ROS nodes on the Raspberry Pi 4.
 5. Start the mission!
 
-## Contributing
-We welcome contributions! Please read our contributing guidelines before making a pull request.
-
-## License
-This project is licensed under the MIT License. See the LICENSE file for details.
+## Credits
+Thank you to Prof Boyd Anderson for overseeing the project as well as the guidance by the lab staff and TAs.
