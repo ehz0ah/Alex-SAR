@@ -32,15 +32,14 @@ volatile TDirection dir;
 #define ALEX_LENGTH   11.5
 #define ALEX_BREADTH  15.0
 
-#define S0 47
-#define S1 45
+#define S0_PIN_BIT 2 // pin 47 PL2
+#define S1_PIN_BIT 4 // pin 45 PL4
+#define S2_PIN_BIT 6 // pin 43 PL6
+#define S3_PIN_BIT 0 // pin 41 PG0
+#define sensorOut_PIN_BIT 2 // pin 39 PG2
 
 
-#define S2 43
-#define S3 41
-#define sensorOut 39
-
-#define buzzerPin 30
+#define buzzerPin 7   // Arduino Mega pin 30 corresponds to PORTC7
 
 // Define pins by their bit positions in the PORT registers
 #define TRIG1_PIN_BIT 0  // Bit 0 of PORTA for the first sensor's trigger (Left)D22
@@ -64,11 +63,19 @@ float alexCirc = 0.0;
 
 Servo clawServo;  // Create a servo object to control the claw
 
-#define clawServoPin  14  // Servo is attached to digital pin 14
-const int openPosition = 20;   // Modify as necessary for your servo's open position
-const int closedPosition = 250; // Modify as necessary for your servo's closed position
+#define SERVO_PIN 46  // Pin 46 uses OC5A (Timer 5)
+
+// Define the pulse widths in terms of timer ticks
+const unsigned int openPositionTicks = 4000;   // 2 ms pulse corresponding to 180 deg
+const unsigned int closedPositionTicks = 2000; // 1 ms pulse corresponding to 0 deg
 
 bool clawIsOpen = false;  // State of the claw
+
+// Global serialisation variables
+#define BUFFER_LEN 256     // Buffer is initialized to accept up to "size" characters.
+// buffers for UART
+TBuffer _recvBuffer;
+TBuffer _xmitBuffer;
 
 
 /*
@@ -113,216 +120,303 @@ int greenFreq = 0;
 int blueFreq = 0;
 int color = 0;
 
-
-// distance front, left, right
-volatile unsigned long distanceLeft = 0;
-volatile unsigned long distanceFront = 0;
-volatile unsigned long distanceRight = 0;
-
-
 /*
 
-   Alex Communication Routines.
+   Alex Functionalities.
 
 */
 
-void toggleClaw() {
-  if (clawIsOpen) {
-    clawServo.write(closedPosition); // Close the claw if it is open
-    clawIsOpen = false;              // Update the state to closed
-  } else {
-    clawServo.write(openPosition);   // Open the claw if it is closed
-    clawIsOpen = true;               // Update the state to open
-  }
-  delay(15); // Delay to give the servo time to reach the position
+void setupClaw() {
+    // Set SERVO_PIN as output
+    DDRL |= 0b00000001;  // PL0 is Pin 46 on Arduino Mega
+
+    // Setup Timer 5 for PWM
+    TCCR5A = 0b10000010;  // Non-inverting mode on OC5A, Fast PWM, TOP is ICR5
+    TCCR5B = 0b00011010;  // Fast PWM, TOP is ICR5, Prescaler set to 8
+
+    ICR5 = 39999;  // TOP value for 50Hz frequency & 20ms period with a prescaler of 8
+
+    // Set servo to closed position initially
+    OCR5A = closedPositionTicks;
 }
 
+void toggleClaw() {
+    if (clawIsOpen) {
+        OCR5A = closedPositionTicks; // Move servo to closed position
+        clawIsOpen = false;
+    } else {
+        OCR5A = openPositionTicks;   // Move servo to open position
+        clawIsOpen = true;
+    }
+    _delay_ms(15); // Delay to allow the servo to reach position
+}
+
+
 void setupBuzzer() {
-  pinMode(buzzerPin, OUTPUT);
-  tone(buzzerPin, 1000, 2000);
+  // Set the buzzer pin as output
+  DDRC |= (1 << DDC7);
+}
+
+void tone(unsigned int frequency) {
+  // Calculate the period of the wave in microseconds
+  unsigned long period = 1000000 / frequency;
+
+  // Set the prescaler to 64
+  TCCR4B = (TCCR4B & 0xF8) | 0x03;
+
+  // Set the output compare register
+  OCR4A = period - 1;
+
+  // Set timer mode (CTC mode)
+  TCCR4A |= (1 << WGM41);
+
+  // Enable timer interrupt
+  TIMSK4 |= (1 << OCIE4A);
+
+  // Start the timer
+  TCCR4B |= (1 << CS40);
+}
+
+void noTone() {
+  // Turn off the timer
+  TCCR4B = 0;
+  // Turn off the buzzer pin
+  PORTC &= ~(1 << PORTC7);
+}
+
+// Timer 4 output compare A match interrupt service routine
+ISR(TIMER4_COMPA_vect) {
+  // Toggle the buzzer pin
+  PORTC ^= (1 << PORTC7);
 }
 
 void celebrate() {
-  tone(buzzerPin, 190);
+  // Define timer registers
+  TCCR4A = 0; // Clear timer control registers
+  TCCR4B = 0;
+  TCNT4 = 0; // Reset timer counter
+  // Set the buzzer pin as output
+  DDRC |= (1 << DDC7);
+
+  // Play tones
+  tone(190);
   delay(200);
-  tone(buzzerPin, 220);
+  tone(220);
   delay(200);
-  tone(buzzerPin, 220);
+  tone(220);
   delay(200);
-  tone(buzzerPin, 587.33);
+  tone(587.33);
   delay(200);
-  tone(buzzerPin, 587.33);
+  tone(587.33);
   delay(200);
-  tone(buzzerPin, 739.99);
+  tone(739.99);
   delay(200);
-  tone(buzzerPin, 739.99);
+  tone(739.99);
   delay(200);
-  tone(buzzerPin, 880);
+  tone(880);
   delay(200);
-  tone(buzzerPin, 185);
+  tone(185);
   delay(200);
-  tone(buzzerPin, 220);
+  tone(220);
   delay(200);
-  tone(buzzerPin, 220);
+  tone(220);
   delay(200);
-  tone(buzzerPin, 587.33);
+  tone(587.33);
   delay(200);
-  tone(buzzerPin, 587.33);
+  tone(587.33);
   delay(100);
-  tone(buzzerPin, 740);
-  delay(100);
-  tone(buzzerPin, 740);
-  delay(100);
-  tone(buzzerPin, 880);
+  tone(740);
   delay(200);
-  tone(buzzerPin, 987.77);
+  tone(740);
+  delay(200);
+  tone(880);
+  delay(200);
+  tone(987.77);
   delay(600);
-  tone(buzzerPin, 783.99);
+  tone(783.99);
   delay(150);
-  tone(buzzerPin, 1174.66);
+  tone(1174.66);
   delay(1600);
-  tone(buzzerPin, 185);
+  tone(185);
   delay(200);
-  tone(buzzerPin, 220);
+  tone(220);
   delay(200);
-  tone(buzzerPin, 220);
+  tone(220);
   delay(200);
-  tone(buzzerPin, 587.33);
+  tone(587.33);
   delay(200);
-  tone(buzzerPin, 587.33);
+  tone(587.33);
   delay(200);
-  tone(buzzerPin, 739.99);
+  tone(739.99);
   delay(200);
-  tone(buzzerPin, 739.99);
+  tone(739.99);
   delay(200);
-  tone(buzzerPin, 880);
+  tone(880);
   delay(200);
-  tone(buzzerPin, 185);
-  delay(100);
-  tone(buzzerPin, 220);
+  tone(185);
   delay(200);
-  tone(buzzerPin, 220);
+  tone(220);
   delay(200);
-  tone(buzzerPin, 587.33);
+  tone(220);
   delay(200);
-  tone(buzzerPin, 587.33);
-  delay(100);
-  tone(buzzerPin, 740);
+  tone(587.33);
   delay(200);
-  tone(buzzerPin, 740);
+  tone(587.33);
   delay(200);
-  tone(buzzerPin, 880);
+  tone(740);
   delay(200);
-  tone(buzzerPin, 1046.50);
+  tone(740);
+  delay(200);
+  tone(880);
+  delay(200);
+  tone(1046.50);
   delay(500);
-  tone(buzzerPin, 1046.50);
+  tone(1046.50);
   delay(200);
-  tone(buzzerPin, 1046.50);
+  tone(1046.50);
   delay(1200);
-  tone(buzzerPin, 1046.50);
+  tone(1046.50);
   delay(200);
-  tone(buzzerPin, 987.77);
+  tone(987.77);
   delay(500);
-  tone(buzzerPin, 1046.50);
+  tone(1046.50);
   delay(150);
-  tone(buzzerPin, 783.99);
+  tone(783.99);
   delay(1000);
-  noTone(buzzerPin);
+  noTone();
 }
 
 void greenSiren() {
-  tone(buzzerPin, 100);
+  // Define timer registers
+  TCCR4A = 0; // Clear timer control registers
+  TCCR4B = 0;
+  TCNT4 = 0; // Reset timer counter
+  // Set the buzzer pin as output
+  DDRC |= (1 << DDC7);
+
+  // Play green siren
+  tone(100);
   delay(300);
-  tone(buzzerPin, 200);
+  tone(200);
   delay(300);
-  tone(buzzerPin, 100);
+  tone(100);
   delay(300);
-  tone(buzzerPin, 200);
+  tone(200);
   delay(300);
-  tone(buzzerPin, 100);
-  noTone(buzzerPin);
+  tone(100);
+  noTone();
 }
 
 void redSiren() {
-  tone(buzzerPin, 800);
+  // Define timer registers
+  TCCR4A = 0; // Clear timer control registers
+  TCCR4B = 0;
+  TCNT4 = 0; // Reset timer counter
+  // Set the buzzer pin as output
+  DDRC |= (1 << DDC7);
+
+  // Play red siren
+  tone(800);
   delay(300);
-  tone(buzzerPin, 700);
+  tone(700);
   delay(300);
-  tone(buzzerPin, 800);
+  tone(800);
   delay(300);
-  tone(buzzerPin, 700);
+  tone(700);
   delay(300);
-  tone(buzzerPin, 800);
-  noTone(buzzerPin);
+  tone(800);
+  noTone();
 }
 
 
-void setupUltra() {
-  pinMode(TRIG1_PIN, OUTPUT);
-  pinMode(ECHO1_PIN, INPUT);
-  pinMode(TRIG2_PIN, OUTPUT);
-  pinMode(ECHO2_PIN, INPUT);
-  pinMode(TRIG3_PIN, OUTPUT);
-  pinMode(ECHO3_PIN, INPUT);
+// ISR for timer overflows so that we can keep count how many times it overflows if not max dist is only 70cm
+ISR(TIMER5_OVF_vect) {
+  overflowCount++;
+}
+
+// Timer5 initialization
+void timer5_init() {
+  cli();
+  TCCR5A = 0; // Clear Timer/Counter5 Control Register A
+  TCCR5B = 0; // Clear Timer/Counter5 Control Register B
+  TCCR5B |= 0b00000001; // Set no prescaler
+  TCNT5 = 0; // Clear Timer/Counter5
+  TIMSK5 |= 0b00000001; // Enable Timer/Counter5 Overflow Interrupt
+  overflowCount = 0; // Reset overflow counter
+  sei(); // Enable global interrupts
+}
+// Ultrasonic sensor initialization
+void ultrasonic_init() {
+  // Set trigger pins as outputs on PORTA
+  DDRA |= (1 << TRIG1_PIN_BIT) | (1 << TRIG2_PIN_BIT) | (1 << TRIG3_PIN_BIT);
+  // Set echo pins as inputs on PORTA
+  DDRA &= ~((1 << ECHO1_PIN_BIT) | (1 << ECHO2_PIN_BIT) | (1 << ECHO3_PIN_BIT));
 }
 
 // Function to trigger ultrasonic pulse
-void triggerUltrasonic(int trigPin) {
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);        // 10-microsecond pulse
-  digitalWrite(trigPin, LOW);
+void triggerUltrasonic(uint8_t trigPinBit) {
+  PORTA |= (1 << trigPinBit);  // Set the corresponding trigger pin HIGH
+  _delay_us(10);               // Wait for 10 microseconds
+  PORTA &= ~(1 << trigPinBit); // Set the trigger pin LOW
 }
 
 // Function to measure the distance
-unsigned long measureDistance(int trigPin, int echoPin) {
-  triggerUltrasonic(trigPin);  // Send a pulse
+unsigned long measureDistance(uint8_t trigPinBit, uint8_t echoPinBit) {
+  overflowCount = 0; // Reset the overflow counter
+  TCNT5 = 0;         // Reset the timer value
+  triggerUltrasonic(trigPinBit); // Trigger the ultrasonic pulse
 
-  // Measure the length of the incoming echo pulse
-  unsigned long duration = pulseIn(echoPin, HIGH);
-  unsigned long distance = (duration / 2) * 0.0346;  // Calculate distance in cm (speed of sound in cm/us)
+  // Wait for the echo pin to go high (start of the echo signal)
+  while (!(PINA & (1 << echoPinBit)));
+  TCNT5 = 0; // Reset the timer value again to measure the high pulse width
+
+  // Wait for the echo pin to go low (end of the echo signal)
+  while (PINA & (1 << echoPinBit));
+
+  // Calculate the duration in microseconds and distance in cm
+  unsigned long totalDuration = TCNT5 + (overflowCount * 65535);
+  unsigned long durationInMicroseconds = totalDuration * (1.0 / 16000000.0) * 1000000.0;
+  unsigned long distance = (durationInMicroseconds * 0.0346) / 2;
 
   return distance;
 }
 
-void measureDistances() {
-  distanceLeft = measureDistance(TRIG1_PIN, ECHO1_PIN);
-  distanceFront = measureDistance(TRIG2_PIN, ECHO2_PIN);
-  distanceRight = measureDistance(TRIG3_PIN, ECHO3_PIN);
+void measureDistanceLeft() {
+    distanceLeft = measureDistance(TRIG1_PIN_BIT, ECHO1_PIN_BIT);
 }
 
-int averageReading() {
-  int total = 0;
-  for (int i = 0; i < 5; i += 1) {
-    int reading = pulseIn(sensorOut, LOW);
-    total += reading;
-  }
-  return total / 5;
+void measureDistanceFront() {
+    distanceFront = measureDistance(TRIG2_PIN_BIT, ECHO2_PIN_BIT);
 }
+
+void measureDistanceRight() {
+    distanceRight = measureDistance(TRIG3_PIN_BIT, ECHO3_PIN_BIT);
+}
+
 
 int getRed() {
   // Setting RED (R) filtered photodiodes to be read
-  digitalWrite(S2, LOW);
-  digitalWrite(S3, LOW);
+  PORTL &= ~(1 << S2_PIN_BIT);
+  PORTG &= ~(1 << S3_PIN_BIT);
   redFreq = averageReading();
   return redFreq;
 }
 
 int getGreen() {
   // Setting GREEN (G) filtered photodiodes to be read
-  digitalWrite(S2, HIGH);
-  digitalWrite(S3, HIGH);
+  PORTL |= (1 << S2_PIN_BIT);
+  PORTG |= (1 << S3_PIN_BIT);
   greenFreq = averageReading();
   return greenFreq;
 }
 
 int getBlue() {
   // Setting BLUE (B) filtered photodiodes to be read
-  digitalWrite(S2, LOW);
-  digitalWrite(S3, HIGH);
+  PORTL &= ~(1 << S2_PIN_BIT);
+  PORTG |= (1 << S3_PIN_BIT);
   blueFreq = averageReading();
   return blueFreq;
 }
-
 
 void getColour() {
   redFreq = getRed();
@@ -333,27 +427,28 @@ void getColour() {
   delay(50);
 
 
-  if (abs(redFreq - greenFreq) < 20 && greenFreq > blueFreq) {   // blueFreq < 130
-    color = 1;
+  if (abs(redFreq - greenFreq) < 20 && greenFreq > blueFreq) {  
+    color = 1;  //white colour detected
   }
   else if (greenFreq < redFreq) {
-    color = 2;
+    color = 2;  // green colour detected
   } else if (redFreq < greenFreq) {
-    color = 3;
+    color = 3;  //red colour detected
   } else {
-    color = 0;
+    color = 0;  //invalid colour
   }
 }
 
 void setupColor() {
-  pinMode(S0, OUTPUT);
-  pinMode(S1, OUTPUT);
-  pinMode(S2, OUTPUT);
-  pinMode(S3, OUTPUT);
-  pinMode(sensorOut, INPUT);
-  digitalWrite(S0, HIGH);
-  digitalWrite(S1, LOW);
+  // Set S0, S1, S2, S3 as output, sensorOut as input
+  DDRL |= (1 << S0_PIN_BIT) | (1 << S1_PIN_BIT) | (1 << S2_PIN_BIT);
+  DDRG |= (1 << S3_PIN_BIT);
+  DDRG &= ~(1 << sensorOut_PIN_BIT);
+  // Set S0 to HIGH, S1 to LOW, so output frequency scaling is set to 20%
+  PORTL |= (1 << S0_PIN_BIT);
+  PORTL &= ~(1 << S1_PIN_BIT);
 }
+
 
 unsigned long computeDeltaTicks(float ang) {
   unsigned long ticks = (unsigned long) ((ang * alexCirc * COUNTS_PER_REV) / (360.0 * WHEEL_CIRC));
@@ -609,10 +704,19 @@ ISR(INT3_vect) {
 // with bare-metal code.
 void setupSerial()
 {
-  // To replace later with bare-metal.
-  Serial.begin(9600);
-  // Change Serial to Serial2/Serial3/Serial4 in later labs when using the other UARTs
+  // Initialize the buffer. We must call this before using writeBuffer or readBuffer.
+  // Buffer to use is specified in "buffer", size of buffer in characters is specified in "size"
+  //set baud rate to 9600 and initialize our transmit and receive buffers
+  initBuffer(&_recvBuffer, BUFFER_LEN);
+  initBuffer(&_xmitBuffer, BUFFER_LEN);
+  UBRR0L = 103;
+  UBRR0H = 0;
+  
+  //set frame format: 8 bit, no parity, 1 stop bit (8N1)
+  UCSR0C = 0b110;
+  UCSR0A = 0;
 }
+
 
 // Start the serial connection. For now we are using
 // Arduino wiring and this function is empty. We will
@@ -620,10 +724,12 @@ void setupSerial()
 
 void startSerial()
 {
-  // Empty for now. To be replaced with bare-metal code
-  // later on.
-
+  // Enable USART transmitter and receiver
+  // USART_RX_vect to be triggered when a character is received
+  // USART_UDRE_vect intterupt triggered when sending data register is empty
+  UCSR0B = 0b10111000;
 }
+
 
 // Read the serial port. Returns the read character in
 // ch if available. Also returns TRUE if ch is valid.
@@ -632,24 +738,59 @@ void startSerial()
 int readSerial(char *buffer)
 {
 
-  int count = 0;
+  int count=0;
+  TBufferResult result;
 
-  // Change Serial to Serial2/Serial3/Serial4 in later labs when using other UARTs
-
-  while (Serial.available())
-    buffer[count++] = Serial.read();
-
+  do{
+    result = readBuffer(&_recvBuffer, &buffer[count]);
+    if (result == BUFFER_OK){
+      count++;
+    } 
+    if (!dataAvailable(&_recvBuffer)) {
+       break;
+    }
+  } while (result == BUFFER_OK);
+  
   return count;
 }
+
 
 // Write to the serial port. Replaced later with
 // bare-metal code
 
 void writeSerial(const char *buffer, int len)
 {
-  Serial.write(buffer, len);
-  // Change Serial to Serial2/Serial3/Serial4 in later labs when using other UARTs
+  TBufferResult result = BUFFER_OK;
+  for(int i = 1; i < len; i += 1){
+    result = writeBuffer(&_xmitBuffer, buffer[i]);
+    if (result != BUFFER_OK) {
+       break;
+    }
+  }
+  //read and write data from UDR0
+  UDR0 = buffer[0];
+  UCSR0B |= 0b00100000;
 }
+
+ISR(USART_RX_vect){
+  // Data from UDR0 is read and written to data
+  unsigned char data = UDR0;
+  writeBuffer(&_recvBuffer, data);
+}
+
+ISR(USART_UDRE_vect){
+  // Data to be send is copied into UDR0
+  unsigned char data;
+  TBufferResult result = readBuffer(&_xmitBuffer, &data);
+
+  if (result == BUFFER_OK){
+    UDR0 = data;
+  } 
+  else if (result == BUFFER_EMPTY){
+      UCSR0B &= 0b11011111;
+  }
+}
+
 
 /*
    Alex's setup and run codes
@@ -823,10 +964,10 @@ void setup() {
   setupEINT();
   setupSerial();
   startSerial();
-  clawServo.attach(clawServoPin);
-  clawServo.write(closedPosition);
+  setupClaw();
   setupColor();
-  setupUltra();
+  ultrasonic_init(); // Initialize the ultrasonic sensors
+  timer5_init(); // Initialize the timer
   setupColor();
   setupBuzzer();
   enablePullups();
