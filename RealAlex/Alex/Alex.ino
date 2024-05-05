@@ -3,6 +3,10 @@
 #include <stdarg.h>
 #include <serialize.h>
 #include <math.h>
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+
 
 #include "packet.h"
 #include "constants.h"
@@ -38,12 +42,21 @@ volatile TDirection dir;
 
 #define buzzerPin 30
 
-#define TRIG1_PIN 22  // D22 for the first sensor's trigger
-#define ECHO1_PIN 23  // D23 for the first sensor's echo
-#define TRIG2_PIN 24  // D24 for the second sensor's trigger
-#define ECHO2_PIN 25  // D25 for the second sensor's echo
-#define TRIG3_PIN 26  // D26 for the third sensor's trigger
-#define ECHO3_PIN 27  // D27 for the third sensor's echo
+// Define pins by their bit positions in the PORT registers
+#define TRIG1_PIN_BIT 0  // Bit 0 of PORTA for the first sensor's trigger (Left)D22
+#define ECHO1_PIN_BIT 1  // Bit 1 of PIND for the first sensor's echo (Left)D23
+#define TRIG2_PIN_BIT 2  // Bit 2 of PORTA for the second sensor's trigger (Front)D24
+#define ECHO2_PIN_BIT 3  // Bit 3 of PIND for the second sensor's echo (Front)D25
+#define TRIG3_PIN_BIT 4  // Bit 4 of PORTA for the third sensor's trigger (Right)D26
+#define ECHO3_PIN_BIT 5  // Bit 5 of PIND for the third sensor's echo (Right)D27
+
+volatile unsigned long distanceLeft = 0;
+volatile unsigned long distanceFront = 0;
+volatile unsigned long distanceRight = 0;
+
+// Timer overflow count
+volatile unsigned long overflowCount = 0;
+
 
 float alexDiagonal = 0.0;
 
