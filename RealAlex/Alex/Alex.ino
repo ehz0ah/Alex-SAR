@@ -471,7 +471,7 @@ void left(float ang, float speed) {
 
 void right(float ang, float speed) {
   if (ang == 0) {
-    deltaTicks = 99999999;
+    deltaTicks = 9999999;
   }
   else {
     deltaTicks = computeDeltaTicks(ang);
