@@ -3,6 +3,9 @@
 ## Overview
 This project is about an autonomous vehicle designed for search and rescue operations. The vehicle is powered by a **Raspberry Pi 4** and an **Arduino Mega**. It uses a variety of tools and technologies to navigate and perform its tasks.
 
+![d49cbd4b-2d10-4046-99a7-9ee6040d7b70](https://github.com/user-attachments/assets/e2a4a91f-82b9-4c2a-bda3-f50062b798cf)
+
+
 ## Tools and Technologies
 - **RPLiDAR**: A low cost LIDAR sensor used for 360-degree environment scanning to detect and avoid obstacles.
 - **ROS (Robot Operating System)**: A flexible framework for writing robot software, used for managing various robot peripherals and sensors.
