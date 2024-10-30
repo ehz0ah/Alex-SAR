@@ -1,5 +1,8 @@
 # Search and Rescue Autonomous Vehicle
 
+## Project Documentation
+[Detailed Documentation](https://github.com/ehz0ah/Alex-SAR/blob/main/Project%20Documentation.pdf)
+
 ## Overview
 This project is about an autonomous vehicle designed for search and rescue operations. The vehicle is powered by a **Raspberry Pi 4** and an **Arduino Mega**. It uses a variety of tools and technologies to navigate and perform its tasks.
 
